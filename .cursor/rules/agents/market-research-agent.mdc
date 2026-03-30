@@ -1,7 +1,7 @@
 ---
 description: 시장조사 분석 에이전트 - Account 기반 맞춤 시장조사 보고서 생성
 globs: agents/market_research.py
-alwaysApply: false
+alwaysApply: true
 ---
 
 # 시장조사 Analyzer 에이전트
