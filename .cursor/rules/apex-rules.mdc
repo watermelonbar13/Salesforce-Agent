@@ -1,0 +1,53 @@
+---
+description: Salesforce Apex 코딩 공통 규칙
+alwaysApply: true
+---
+
+# Apex Rules
+
+## 네이밍 규칙
+- 클래스명: PascalCase (예: MarketResearchService)
+- 메서드명: camelCase (예: getAccountDetail)
+- 변수명: camelCase (예: accountList)
+- 상수명: UPPER_SNAKE_CASE (예: MAX_RESULTS)
+- 테스트 클래스: 원본클래스명 + Test (예: MarketResearchServiceTest)
+
+## 클래스 구조
+- 모든 클래스에 `with sharing` 명시
+- LWC에서 호출하는 메서드는 반드시 `@AuraEnabled` 어노테이션
+- 캐시 가능한 조회는 `@AuraEnabled(cacheable=true)` 사용
+- DML 포함 메서드는 `cacheable=true` 사용 금지
+
+## SOQL 규칙
+- 필요한 필드만 SELECT (SELECT * 금지)
+- LIMIT 반드시 명시
+- WHERE 조건에 인덱스 필드 우선 사용 (Id, OwnerId, CreatedDate)
+- 동적 SOQL 사용 시 반드시 String.escapeSingleQuotes() 처리
+- SOQL in loop 금지 (bulkify 패턴 사용)
+
+## 에러 처리
+- 모든 메서드 try-catch 필수
+- LWC 전달 에러는 AuraHandledException 사용
+- 에러 메시지는 반드시 한국어로
+- System.debug()로 에러 로깅 필수
+
+```apex
+try {
+    // 로직
+} catch (Exception e) {
+    System.debug('에러: ' + e.getMessage());
+    throw new AuraHandledException('오류가 발생했습니다: ' + e.getMessage());
+}
+```
+
+## Callout 규칙
+- 타임아웃 반드시 설정 (최대 30000ms)
+- Named Credential 반드시 사용 (URL 하드코딩 금지)
+- API 키는 Custom Settings에 저장
+- Callout과 DML은 같은 트랜잭션에서 사용 금지
+
+## 테스트 코드
+- 테스트 커버리지 75% 이상 유지
+- @isTest 어노테이션 필수
+- Test.startTest() / Test.stopTest() 사용
+- Mock Callout은 HttpCalloutMock 인터페이스 구현

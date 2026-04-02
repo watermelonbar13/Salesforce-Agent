@@ -1,0 +1,89 @@
+---
+description: Salesforce LWC 개발 공통 규칙
+alwaysApply: true
+---
+
+# LWC Rules
+
+## 네이밍 규칙
+- 컴포넌트명: camelCase (예: marketResearchReport)
+- HTML 이벤트: on + 동사 (예: onclick, onselect)
+- JS 메서드: camelCase (예: handleAccountSelect)
+- CSS 클래스: kebab-case (예: report-container)
+
+## 파일 구조
+```
+componentName/
+├── componentName.html
+├── componentName.js
+├── componentName.css
+└── componentName.js-meta.xml
+```
+
+## JS 규칙
+- `@track` 데이터 바인딩 필수 (반응형 업데이트)
+- `@api` 부모→자식 데이터 전달
+- `@wire` 캐시 가능한 Apex 호출
+- async/await 패턴 사용 (Promise.then 지양)
+- 에러는 반드시 `this.error`로 저장 후 화면에 표시
+
+```javascript
+@track isLoading = false;
+@track error;
+@track data;
+
+async loadData() {
+    this.isLoading = true;
+    try {
+        this.data = await apexMethod({ param: value });
+    } catch (error) {
+        this.error = error.body?.message || '오류가 발생했습니다.';
+    } finally {
+        this.isLoading = false;
+    }
+}
+```
+
+## HTML 규칙
+- 로딩 중 반드시 `lightning-spinner` 표시
+- 에러 반드시 화면에 표시
+- SLDS(Lightning Design System) 클래스 사용
+- 모바일 반응형 고려 (`slds-grid`, `slds-col` 활용)
+
+```html
+<!-- 로딩 -->
+<template if:true={isLoading}>
+    <lightning-spinner alternative-text="로딩 중..."></lightning-spinner>
+</template>
+
+<!-- 에러 -->
+<template if:true={error}>
+    <div class="slds-notify slds-notify_alert slds-alert_error">
+        {error}
+    </div>
+</template>
+```
+
+## 컴포넌트 통신
+- 부모→자식: `@api` 속성
+- 자식→부모: `CustomEvent` + `dispatchEvent`
+- 형제 컴포넌트: LMS(Lightning Message Service) 사용
+
+## js-meta.xml 기본 설정
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>66.0</apiVersion>
+    <isExposed>true</isExposed>
+    <targets>
+        <target>lightning__AppPage</target>
+        <target>lightning__RecordPage</target>
+        <target>lightning__HomePage</target>
+    </targets>
+</LightningComponentBundle>
+```
+
+## 금지 사항
+- `document.querySelector` 사용 금지 → `this.template.querySelector` 사용
+- 인라인 스타일 금지 → CSS 파일 사용
+- console.log 금지 → 개발 완료 후 제거
