@@ -1,17 +1,13 @@
----
-description: 제안 이력 + 발주공고 기반 신규 사업기회 추천 LWC + Apex 생성
----
+# 사업기회 발굴
 
-# /opportunity 커맨드
+Salesforce 이력과 외부 발주공고를 분석하여 신규 사업기회를 추천한다.
 
-## 참조 Skills
-@skills/salesforce-data-model.md
-@skills/g2b-api.md
-@skills/llm-api.md
-
-## 역할
-Salesforce Opportunity 이력과 외부 발주공고를 분석하여
-신규 사업기회를 추천하는 LWC 컴포넌트와 Apex 클래스를 만든다.
+## 수행할 일
+1. 현재 로그인한 영업대표의 과거 12개월 Opportunity 이력 조회
+2. 진행 중인 Opportunity가 없는 담당 Account 목록 조회
+3. 나라장터에서 관련 발주공고 조회
+4. AI가 패턴 분석 후 우선순위 점수화하여 추천 5개 생성
+5. 추천 항목 클릭 시 SF Opportunity 바로 생성
 
 ## 생성할 파일
 ```
@@ -26,13 +22,10 @@ force-app/main/default/
     └── OpportunityGeneratorService.cls-meta.xml
 ```
 
-## 입력
-- 현재 로그인한 영업대표의 UserId (UserInfo.getUserId())
-
-## 출력 (LWC 탭 구성)
-1. **이력 기반 추천** - 과거 Opportunity 패턴 분석 → 추천 5개
-2. **발주공고 기반 추천** - 나라장터 공고 매칭 → 추천 5개
-3. **추천 결과** - 우선순위 점수 + 추천 이유 + Opportunity 생성 버튼
+## 출력 화면 (LWC 탭 구성)
+- **탭1. 이력 기반 추천**: 과거 성공 패턴 분석 → 추천 리스트
+- **탭2. 발주공고 기반 추천**: 공고 매칭 → 추천 리스트
+- **추천 카드**: 우선순위 점수 + 추천 이유 + Opportunity 생성 버튼
 
 ## 우선순위 점수 기준
 | 항목 | 점수 |
@@ -43,14 +36,7 @@ force-app/main/default/
 | 발주 금액 규모 | +15점 |
 | 마감일 30일 이내 | +15점 |
 
-## Apex 구현 요구사항
-- getRecommendationsByHistory(): 과거 12개월 Opportunity 이력 분석
-- getRecommendationsByBids(): 나라장터 공고와 내 Account 매칭
-- createOpportunity(): 추천 항목으로 SF Opportunity 생성
-- 기존 진행 중인 Opportunity와 중복 제외 로직 필수
-
-## LWC 구현 요구사항
-- Opportunity 생성 전 반드시 확인 모달 표시
-- 추천 이유 툴팁으로 표시
-- 점수 기준 설명 팝오버 제공
-- 모든 텍스트 한국어 표시
+## 참고 기능
+- Salesforce 조회/생성: @.cursor/skills/salesforce/SKILL.md
+- 발주공고 조회: @.cursor/skills/public-data/SKILL.md
+- AI 분석: @.cursor/skills/llm-analysis/SKILL.md
