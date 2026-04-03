@@ -1,0 +1,74 @@
+<template>
+    <div class="slds-card slds-p-around_medium chatbot-shell">
+        <div class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small">
+            <div class="slds-col slds-grow">
+                <lightning-input
+                    type="search"
+                    label="Sales Cloud 질문"
+                    placeholder="Sales Cloud에 무엇이든 물어보세요..."
+                    value={question}
+                    onchange={handleQuestionChange}
+                    disabled={isLoading}
+                ></lightning-input>
+            </div>
+            <div class="slds-col slds-no-flex">
+                <lightning-button
+                    variant="brand"
+                    label="질문하기"
+                    onclick={handleSubmit}
+                    disabled={isLoading}
+                ></lightning-button>
+            </div>
+        </div>
+
+        <template if:true={isLoading}>
+            <div class="slds-m-top_medium slds-align_absolute-center">
+                <lightning-spinner alternative-text="응답 생성 중..." size="medium"></lightning-spinner>
+            </div>
+        </template>
+
+        <template if:true={error}>
+            <div class="slds-m-top_small slds-notify slds-notify_alert slds-alert_error" role="alert">
+                <span class="slds-assistive-text">오류</span>
+                <h2>{error}</h2>
+            </div>
+        </template>
+
+        <template if:true={answer}>
+            <div class="slds-m-top_medium">
+                <div class="slds-text-heading_small slds-m-bottom_x-small">답변</div>
+                <div class="slds-box slds-theme_shade answer-box">{answer}</div>
+            </div>
+        </template>
+
+        <template if:true={records.length}>
+            <div class="slds-m-top_medium">
+                <div class="slds-text-heading_small slds-m-bottom_x-small">관련 레코드</div>
+                <ul class="slds-has-dividers_bottom-space">
+                    <template for:each={records} for:item="rec">
+                        <li key={rec.recordId} class="slds-item">
+                            <div class="slds-grid slds-grid_align-spread">
+                                <div class="slds-col">
+                                    <div class="slds-text-title_caps">{rec.objectApiName}</div>
+                                    <div class="slds-text-body_regular">{rec.title}</div>
+                                    <template if:true={rec.snippet}>
+                                        <div class="slds-text-body_small slds-text-color_weak">{rec.snippet}</div>
+                                    </template>
+                                </div>
+                                <div class="slds-col slds-no-flex">
+                                    <lightning-button
+                                        variant="neutral"
+                                        label="레코드 열기"
+                                        data-object={rec.objectApiName}
+                                        data-id={rec.recordId}
+                                        onclick={handleOpenRecord}
+                                    ></lightning-button>
+                                </div>
+                            </div>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+        </template>
+    </div>
+</template>

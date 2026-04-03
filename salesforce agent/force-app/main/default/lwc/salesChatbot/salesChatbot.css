@@ -1,0 +1,8 @@
+.chatbot-shell {
+    border-radius: 0.25rem;
+}
+
+.answer-box {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
