@@ -1,74 +1,164 @@
 <template>
-    <div class="slds-card slds-p-around_medium chatbot-shell">
-        <div class="slds-grid slds-grid_vertical-align-end slds-gutters_x-small">
-            <div class="slds-col slds-grow">
-                <lightning-input
-                    type="search"
-                    label="Sales Cloud 질문"
-                    placeholder="Sales Cloud에 무엇이든 물어보세요..."
-                    value={question}
-                    onchange={handleQuestionChange}
-                    disabled={isLoading}
-                ></lightning-input>
-            </div>
-            <div class="slds-col slds-no-flex">
-                <lightning-button
-                    variant="brand"
-                    label="질문하기"
-                    onclick={handleSubmit}
-                    disabled={isLoading}
-                ></lightning-button>
+    <article class="chatbot-root slds-card">
+        <div class="chatbot-header slds-card__header slds-grid">
+            <div class="slds-media slds-media_center">
+                <div class="slds-media__figure chatbot-header-figure">
+                    <lightning-icon
+                        icon-name="utility:einstein"
+                        alternative-text="세일즈 어시스턴트"
+                        size="small"
+                        class="chatbot-header-icon"
+                    ></lightning-icon>
+                </div>
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">
+                        <span class="chatbot-title">Sales Cloud 어시스턴트</span>
+                    </h2>
+                    <p class="chatbot-subtitle slds-text-body_small slds-text-color_weak">
+                        계정, 기회, 활동 등 Salesforce 데이터 기반으로 답변합니다.
+                    </p>
+                </div>
             </div>
         </div>
 
-        <template if:true={isLoading}>
-            <div class="slds-m-top_medium slds-align_absolute-center">
-                <lightning-spinner alternative-text="응답 생성 중..." size="medium"></lightning-spinner>
+        <div class="slds-card__body slds-card__body_inner chatbot-body">
+            <div class="chatbot-compose slds-box slds-theme_default">
+                <div class="slds-grid slds-wrap slds-gutters_xx-small">
+                    <div class="slds-col slds-size_1-of-1 slds-large-size_9-of-12">
+                        <lightning-input
+                            type="search"
+                            label="Sales Cloud 질문"
+                            placeholder="예: 이번 분기 파이프라인 요약, 다음 고객 미팅은?"
+                            value={question}
+                            onchange={handleQuestionChange}
+                            disabled={isLoading}
+                            class="chatbot-search"
+                        ></lightning-input>
+                    </div>
+                    <div
+                        class="slds-col slds-size_1-of-1 slds-large-size_3-of-12 slds-align-bottom chatbot-actions"
+                    >
+                        <lightning-button
+                            variant="brand"
+                            label="질문하기"
+                            title="질문하기"
+                            onclick={handleSubmit}
+                            disabled={isLoading}
+                            class="chatbot-submit"
+                        ></lightning-button>
+                    </div>
+                </div>
             </div>
-        </template>
 
-        <template if:true={error}>
-            <div class="slds-m-top_small slds-notify slds-notify_alert slds-alert_error" role="alert">
-                <span class="slds-assistive-text">오류</span>
-                <h2>{error}</h2>
-            </div>
-        </template>
+            <template if:true={isLoading}>
+                <div class="chatbot-loading slds-m-top_medium" role="status" aria-live="polite">
+                    <lightning-spinner
+                        alternative-text="응답 생성 중..."
+                        size="medium"
+                    ></lightning-spinner>
+                    <p class="slds-text-body_small slds-text-color_weak slds-m-top_small">
+                        응답을 준비하고 있습니다…
+                    </p>
+                </div>
+            </template>
 
-        <template if:true={answer}>
-            <div class="slds-m-top_medium">
-                <div class="slds-text-heading_small slds-m-bottom_x-small">답변</div>
-                <div class="slds-box slds-theme_shade answer-box">{answer}</div>
-            </div>
-        </template>
+            <template if:true={error}>
+                <div
+                    class="slds-m-top_medium slds-notify slds-notify_alert slds-alert_error chatbot-alert"
+                    role="alert"
+                >
+                    <span class="slds-assistive-text">오류</span>
+                    <span class="slds-icon_container slds-icon-utility-error slds-m-right_x-small">
+                        <lightning-icon
+                            icon-name="utility:error"
+                            alternative-text="오류"
+                            size="x-small"
+                            variant="inverse"
+                        ></lightning-icon>
+                    </span>
+                    <span class="chatbot-alert-text">{error}</span>
+                </div>
+            </template>
 
-        <template if:true={records.length}>
-            <div class="slds-m-top_medium">
-                <div class="slds-text-heading_small slds-m-bottom_x-small">관련 레코드</div>
-                <ul class="slds-has-dividers_bottom-space">
-                    <template for:each={records} for:item="rec">
-                        <li key={rec.recordId} class="slds-item">
-                            <div class="slds-grid slds-grid_align-spread">
-                                <div class="slds-col">
-                                    <div class="slds-text-title_caps">{rec.objectApiName}</div>
-                                    <div class="slds-text-body_regular">{rec.title}</div>
-                                    <template if:true={rec.snippet}>
-                                        <div class="slds-text-body_small slds-text-color_weak">{rec.snippet}</div>
-                                    </template>
+            <template if:true={answer}>
+                <section class="chatbot-answer slds-m-top_medium" aria-live="polite">
+                    <div class="chatbot-section-label">
+                        <lightning-icon
+                            icon-name="utility:comments"
+                            alternative-text=""
+                            size="xx-small"
+                            class="chatbot-section-icon"
+                        ></lightning-icon>
+                        <span>답변</span>
+                    </div>
+                    <div class="assistant-bubble slds-scrollable_y">{answer}</div>
+                </section>
+            </template>
+
+            <template if:true={records.length}>
+                <section class="chatbot-records slds-m-top_medium">
+                    <div class="chatbot-section-label">
+                        <lightning-icon
+                            icon-name="utility:linked"
+                            alternative-text=""
+                            size="xx-small"
+                            class="chatbot-section-icon"
+                        ></lightning-icon>
+                        <span>관련 레코드</span>
+                    </div>
+                    <ul class="record-list">
+                        <template for:each={records} for:item="rec">
+                            <li key={rec.recordId} class="record-list-item">
+                                <div class="record-card slds-grid slds-grid_vertical-align-center">
+                                    <div class="slds-col slds-grow record-card-main">
+                                        <div class="record-meta">
+                                            <lightning-badge
+                                                label={rec.objectApiName}
+                                                class="record-badge"
+                                            ></lightning-badge>
+                                        </div>
+                                        <div class="record-title slds-text-body_regular">{rec.title}</div>
+                                        <template if:true={rec.snippet}>
+                                            <div class="record-snippet slds-text-body_small">{rec.snippet}</div>
+                                        </template>
+                                    </div>
+                                    <div class="slds-col slds-no-flex record-card-action">
+                                        <lightning-button
+                                            variant="neutral"
+                                            label="열기"
+                                            title="레코드 열기"
+                                            icon-name="utility:new_window"
+                                            data-object={rec.objectApiName}
+                                            data-id={rec.recordId}
+                                            onclick={handleOpenRecord}
+                                        ></lightning-button>
+                                    </div>
                                 </div>
-                                <div class="slds-col slds-no-flex">
-                                    <lightning-button
-                                        variant="neutral"
-                                        label="레코드 열기"
-                                        data-object={rec.objectApiName}
-                                        data-id={rec.recordId}
-                                        onclick={handleOpenRecord}
-                                    ></lightning-button>
-                                </div>
-                            </div>
-                        </li>
-                    </template>
-                </ul>
+                            </li>
+                        </template>
+                    </ul>
+                </section>
+            </template>
+
+            <template if:false={hasResults}>
+                <div class="chatbot-empty slds-text-align_center slds-m-vertical_large">
+                    <lightning-icon
+                        icon-name="utility:search"
+                        alternative-text=""
+                        size="small"
+                        class="chatbot-empty-icon"
+                    ></lightning-icon>
+                    <p class="slds-text-body_small slds-text-color_weak slds-m-top_small">
+                        질문을 입력한 뒤 <strong class="slds-text-color_default">질문하기</strong>를 눌러 보세요.
+                    </p>
+                </div>
+            </template>
+        </div>
+
+        <footer class="slds-card__footer chatbot-footer">
+            <div class="slds-text-body_small slds-text-color_weak">
+                AI 생성 답변은 부정확할 수 있으니 중요한 판단 전에는 원본 데이터를 확인하세요.
             </div>
-        </template>
-    </div>
+        </footer>
+    </article>
 </template>

@@ -10,8 +10,8 @@ public with sharing class LLMService {
             throw new AuraHandledException('프롬프트가 비어 있습니다.');
         }
 
-        AI_Agent_Settings__c settings = AI_Agent_Settings__c.getInstance();
-        if (settings == null || String.isBlank(settings.LLM_API_Key__c)) {
+        String apiKey = resolveLlmApiKey();
+        if (String.isBlank(apiKey)) {
             System.debug('LLM API 키 미설정');
             throw new AuraHandledException('AI 설정(LLM API 키)을 확인해 주세요.');
         }
@@ -28,7 +28,7 @@ public with sharing class LLMService {
         req.setEndpoint('callout:Claude_API/v1/messages');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
-        req.setHeader('x-api-key', settings.LLM_API_Key__c);
+        req.setHeader('x-api-key', apiKey);
         req.setHeader('anthropic-version', '2023-06-01');
         req.setBody(JSON.serialize(requestBody));
         req.setTimeout(30000);
@@ -50,8 +50,27 @@ public with sharing class LLMService {
         } catch (AuraHandledException e) {
             throw e;
         } catch (Exception e) {
-            System.debug('Callout 실패: ' + e.getMessage());
-            throw new AuraHandledException('외부 AI 서비스 연결에 실패했습니다.');
+            System.debug('Callout 실패: ' + e.getTypeName() + ' — ' + e.getMessage());
+            String detail = e.getMessage();
+            if (String.isBlank(detail)) {
+                detail = e.getTypeName();
+            }
+            throw new AuraHandledException('외부 AI 서비스 연결에 실패했습니다: ' + detail);
+        }
+    }
+
+    private static String resolveLlmApiKey() {
+        try {
+            List<AI_Agent_Settings__c> rows = [
+                SELECT LLM_API_Key__c
+                FROM AI_Agent_Settings__c
+                ORDER BY CreatedDate ASC
+                LIMIT 1
+            ];
+            return rows.isEmpty() ? null : rows[0].LLM_API_Key__c;
+        } catch (Exception e) {
+            System.debug('AI_Agent_Settings__c 조회 실패(객체/필드 미배포 가능): ' + e.getMessage());
+            return null;
         }
     }
 }

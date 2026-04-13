@@ -9,6 +9,12 @@ export default class SalesChatbot extends NavigationMixin(LightningElement) {
     @track answer;
     @track records = [];
 
+    get hasResults() {
+        const hasAnswer = !!(this.answer && String(this.answer).trim());
+        const hasRecords = Array.isArray(this.records) && this.records.length > 0;
+        return this.isLoading || hasAnswer || hasRecords || !!this.error;
+    }
+
     handleQuestionChange(event) {
         this.question = event.target.value;
     }

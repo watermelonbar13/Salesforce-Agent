@@ -65,9 +65,9 @@ public with sharing class ChatbotService {
         String t = raw.trim();
         if (t.startsWith('```')) {
             Integer start = t.indexOf('{');
-            Integer end = t.lastIndexOf('}');
-            if (start >= 0 && end > start) {
-                return t.substring(start, end + 1);
+            Integer endBrace = t.lastIndexOf('}');
+            if (start >= 0 && endBrace > start) {
+                return t.substring(start, endBrace + 1);
             }
         }
         return t;
@@ -271,9 +271,9 @@ public with sharing class ChatbotService {
     ) {
         String soql =
             'SELECT Id, Name, Amount, StageName, CloseDate, Account.Name FROM Opportunity WHERE OwnerId = :uid';
-        if (Boolean.TRUE.equals(closeThis)) {
+        if (closeThis == true) {
             soql += ' AND CloseDate >= :startThis AND CloseDate <= :endThis';
-        } else if (Boolean.TRUE.equals(closeNext)) {
+        } else if (closeNext == true) {
             soql += ' AND CloseDate >= :startNext AND CloseDate <= :endNext';
         }
         if (String.isNotBlank(likePattern)) {
@@ -312,7 +312,7 @@ public with sharing class ChatbotService {
     ) {
         String soql =
             'SELECT Id, Subject, Status, ActivityDate, Priority, What.Name FROM Task WHERE OwnerId = :uid';
-        if (Boolean.TRUE.equals(incompleteOnly)) {
+        if (incompleteOnly == true) {
             soql += ' AND IsClosed = false';
         }
         if (String.isNotBlank(likePattern)) {
