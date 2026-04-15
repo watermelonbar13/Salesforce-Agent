@@ -1,3 +1,11 @@
+---
+name: 공공 데이터 조회 (나라장터/DART)
+description: >
+  나라장터 발주공고 또는 DART 기업 공시를 조회할 때 사용.
+  "나라장터", "발주공고", "입찰", "DART", "공시", "공공데이터"
+  키워드가 나오면 이 Skill을 로드.
+---
+
 # 공공 데이터 조회 기능
 
 ## 개요
@@ -50,10 +58,10 @@ public static List<Map<String, Object>> searchBidPublic(String keyword) {
                 for (Object item : items) {
                     Map<String, Object> m = (Map<String, Object>) item;
                     Map<String, Object> result = new Map<String, Object>();
-                    result.put('bidNm', m.get('bidNm'));           // 공고명
+                    result.put('bidNm', m.get('bidNm'));            // 공고명
                     result.put('ntceInsttNm', m.get('ntceInsttNm')); // 공고기관
                     result.put('presmptPrce', m.get('presmptPrce')); // 예산금액
-                    result.put('bidClseDt', m.get('bidClseDt'));    // 마감일
+                    result.put('bidClseDt', m.get('bidClseDt'));     // 마감일
                     results.add(result);
                 }
             }

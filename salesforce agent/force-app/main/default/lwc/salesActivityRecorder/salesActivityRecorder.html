@@ -1,0 +1,122 @@
+<template>
+    <article class="slds-card recorder-root">
+        <div class="slds-card__header slds-grid">
+            <header class="slds-media slds-media_center slds-has-flexi-truncate">
+                <div class="slds-media__figure">
+                    <lightning-icon icon-name="utility:record" size="small" alternative-text="녹음"></lightning-icon>
+                </div>
+                <div class="slds-media__body">
+                    <h2 class="slds-card__header-title">미팅/통화 기록 분석</h2>
+                    <p class="slds-text-body_small slds-text-color_weak">음성 또는 텍스트를 분석해 영업활동과 액션 아이템을 저장합니다.</p>
+                </div>
+            </header>
+        </div>
+
+        <div class="slds-card__body slds-card__body_inner">
+            <template if:true={error}>
+                <div class="slds-notify slds-notify_alert slds-alert_error" role="alert">
+                    <span class="slds-assistive-text">오류</span>
+                    <span>{error}</span>
+                </div>
+            </template>
+
+            <lightning-tabset active-tab-value={activeTabValue}>
+                <lightning-tab label="음성 녹음" value="recordTab">
+                    <div class="tab-section">
+                        <div class="record-actions">
+                                <lightning-button
+                                    label="녹음 시작"
+                                    variant="brand"
+                                    onclick={startRecording}
+                                    disabled={isRecording}
+                                ></lightning-button>
+                                <lightning-button
+                                    label="녹음 완료"
+                                    variant="neutral"
+                                    onclick={stopRecording}
+                                    disabled={isStopDisabled}
+                                ></lightning-button>
+                        </div>
+                        <p class="slds-m-top_small slds-text-body_small">경과 시간: {elapsedDisplay}</p>
+                        <lightning-textarea
+                            class="slds-m-top_small"
+                            label="녹음 텍스트"
+                            value={transcriptText}
+                            onchange={handleTranscriptChange}
+                            placeholder="미팅 또는 통화 내용을 입력하거나 녹음을 시작하세요."
+                        ></lightning-textarea>
+                    </div>
+                </lightning-tab>
+
+                <lightning-tab label="AI 분석 결과" value="analysisTab">
+                    <div class="tab-section">
+                        <div class="slds-grid slds-wrap slds-gutters_small">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+                                <lightning-button
+                                    label="분석 시작"
+                                    variant="brand-outline"
+                                    onclick={handleAnalyze}
+                                    disabled={isAnalyzeDisabled}
+                                ></lightning-button>
+                            </div>
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+                                <lightning-button
+                                    label="SF 저장"
+                                    variant="brand"
+                                    onclick={handleSave}
+                                    disabled={isSaveDisabled}
+                                ></lightning-button>
+                            </div>
+                        </div>
+
+                        <template if:true={isAnalyzing}>
+                            <lightning-spinner alternative-text="분석 중..." size="medium"></lightning-spinner>
+                        </template>
+
+                        <template if:true={hasAnalysisResult}>
+                            <lightning-textarea
+                                class="slds-m-top_medium"
+                                label="영업활동 내용"
+                                value={activityContent}
+                                onchange={handleActivityContentChange}
+                            ></lightning-textarea>
+
+                            <div class="slds-m-top_medium">
+                                <p class="slds-text-title_bold slds-m-bottom_x-small">Next Action 후보</p>
+                                <template if:true={actionItems.length}>
+                                    <template for:each={actionItems} for:item="item">
+                                        <div key={item.index} class="action-item-row slds-grid slds-wrap slds-gutters_small">
+                                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-12">
+                                                <lightning-input
+                                                    type="checkbox"
+                                                    checked={item.selected}
+                                                    data-index={item.index}
+                                                    onchange={handleToggleItem}
+                                                    variant="label-hidden"
+                                                    label="선택"
+                                                ></lightning-input>
+                                            </div>
+                                            <div class="slds-col slds-size_1-of-1 slds-medium-size_11-of-12">
+                                                <div class="slds-text-body_regular">{item.subject}</div>
+                                                <div class="slds-text-body_small slds-text-color_weak">
+                                                    우선순위: {item.priority} / 완료 예정일: {item.dueDate}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </template>
+                                <template if:false={actionItems.length}>
+                                    <p class="slds-text-body_small slds-text-color_weak">추출된 액션 아이템이 없습니다.</p>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </lightning-tab>
+            </lightning-tabset>
+
+            <template if:true={isSaving}>
+                <lightning-spinner alternative-text="저장 중..." size="medium"></lightning-spinner>
+            </template>
+        </div>
+    </article>
+</template>

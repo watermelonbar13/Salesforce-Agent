@@ -1,9 +1,11 @@
 /**
- * Claude API 호출 공통 모듈. 프롬프트 조합은 각 기능 서비스에서 수행한다.
+ * Azure OpenAI API 호출 공통 모듈. 프롬프트 조합은 각 기능 서비스에서 수행한다.
  */
 public with sharing class LLMService {
-    private static final String MODEL = 'claude-sonnet-4-20250514';
+    private static final String MODEL = 'gpt-4o-mini';
     private static final Integer MAX_TOKENS = 2000;
+    private static final String AZURE_OPENAI_ENDPOINT_PATH =
+        '/openai/deployments/' + MODEL + '/chat/completions?api-version=2024-02-15-preview';
 
     public static String callClaude(String prompt) {
         if (String.isBlank(prompt)) {
@@ -17,7 +19,6 @@ public with sharing class LLMService {
         }
 
         Map<String, Object> requestBody = new Map<String, Object>{
-            'model' => MODEL,
             'max_tokens' => MAX_TOKENS,
             'messages' => new List<Object>{
                 new Map<String, Object>{ 'role' => 'user', 'content' => prompt }
@@ -25,11 +26,10 @@ public with sharing class LLMService {
         };
 
         HttpRequest req = new HttpRequest();
-        req.setEndpoint('callout:Claude_API/v1/messages');
+        req.setEndpoint('callout:Azure_OpenAI' + AZURE_OPENAI_ENDPOINT_PATH);
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
-        req.setHeader('x-api-key', apiKey);
-        req.setHeader('anthropic-version', '2023-06-01');
+        req.setHeader('api-key', apiKey);
         req.setBody(JSON.serialize(requestBody));
         req.setTimeout(30000);
 
@@ -38,14 +38,18 @@ public with sharing class LLMService {
             HttpResponse res = http.send(req);
             if (res.getStatusCode() == 200) {
                 Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-                List<Object> content = (List<Object>) body.get('content');
-                if (content == null || content.isEmpty()) {
+                List<Object> choices = (List<Object>) body.get('choices');
+                if (choices == null || choices.isEmpty()) {
                     return null;
                 }
-                Map<String, Object> block = (Map<String, Object>) content[0];
-                return (String) block.get('text');
+                Map<String, Object> firstChoice = (Map<String, Object>) choices[0];
+                if (firstChoice == null || !firstChoice.containsKey('message')) {
+                    return null;
+                }
+                Map<String, Object> message = (Map<String, Object>) firstChoice.get('message');
+                return message == null ? null : (String) message.get('content');
             }
-            System.debug('Claude API 오류: ' + res.getStatusCode() + ' ' + res.getBody());
+            System.debug('Azure OpenAI API 오류: ' + res.getStatusCode() + ' ' + res.getBody());
             throw new AuraHandledException('AI 서비스 응답 오류: ' + res.getStatusCode());
         } catch (AuraHandledException e) {
             throw e;

@@ -1,3 +1,11 @@
+---
+name: Salesforce 데이터 조회/저장
+description: >
+  Salesforce CRM 데이터를 SOQL로 조회하거나 DML로 저장할 때 사용.
+  "Account 조회", "Task 생성", "Opportunity 생성", "Activity 저장",
+  "SF 레코드", "SOQL" 키워드가 나오면 이 Skill을 로드.
+---
+
 # Salesforce 기능
 
 ## 개요

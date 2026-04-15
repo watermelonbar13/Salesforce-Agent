@@ -1,54 +1,65 @@
+---
+name: AI 분석 (Azure OpenAI API)
+description: >
+  Azure OpenAI API를 Apex Callout으로 호출할 때 사용.
+  "AI 분석", "요약 생성", "이메일 초안", "영업전략", "미팅 분석",
+  "Action Item 추출", "인사이트", "Azure OpenAI", "GPT" 키워드가 나오면 이 Skill을 로드.
+---
+
 # AI 분석 기능
 
 ## 개요
-Claude API를 Apex Callout으로 호출하여 영업 인사이트, 이메일 초안,
+Azure OpenAI API를 Apex Callout으로 호출하여 영업 인사이트, 이메일 초안,
 미팅 준비, 로그 분석 등 AI 기반 콘텐츠를 생성하는 기능
 
 ## API 키 저장 위치
 ```
 Setup → Custom Settings → AI_Agent_Settings__c
-- LLM_API_Key__c (Claude API 키)
+- LLM_API_Key__c (Azure OpenAI API 키)
 ```
 
 ## Named Credential 설정
 ```
 Setup → Security → Named Credentials → New
-Label: Claude_API
-Name: Claude_API
-URL: https://api.anthropic.com
+Label: Azure_OpenAI
+Name: Azure_OpenAI
+URL: https://{your-resource-name}.openai.azure.com
 Identity Type: Anonymous
 ```
 
 ## Remote Site Settings 등록
 ```
 Setup → Security → Remote Site Settings → New
-Remote Site Name: Claude_API
-Remote Site URL: https://api.anthropic.com
+Remote Site Name: Azure_OpenAI
+Remote Site URL: https://{your-resource-name}.openai.azure.com
 ```
 
 ## 기본 Apex 호출 패턴
 ```apex
 public class LLMService {
-    private static final String MODEL = 'claude-sonnet-4-20250514';
+    private static final String DEPLOYMENT_NAME = 'gpt-4o-mini';
+    private static final String API_VERSION = '2024-10-21';
     private static final Integer MAX_TOKENS = 2000;
 
-    private static String callClaude(String prompt) {
+    private static String callAzureOpenAI(String prompt) {
         AI_Agent_Settings__c settings = AI_Agent_Settings__c.getInstance();
 
         Map<String, Object> requestBody = new Map<String, Object>{
-            'model' => MODEL,
-            'max_tokens' => MAX_TOKENS,
             'messages' => new List<Object>{
+                new Map<String, Object>{ 'role' => 'system', 'content' => '모든 답변은 한국어로 작성하세요.' },
                 new Map<String, Object>{ 'role' => 'user', 'content' => prompt }
-            }
+            },
+            'max_tokens' => MAX_TOKENS
         };
 
         HttpRequest req = new HttpRequest();
-        req.setEndpoint('callout:Claude_API/v1/messages');
+        req.setEndpoint(
+            'callout:Azure_OpenAI/openai/deployments/' + DEPLOYMENT_NAME
+            + '/chat/completions?api-version=' + API_VERSION
+        );
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
-        req.setHeader('x-api-key', settings.LLM_API_Key__c);
-        req.setHeader('anthropic-version', '2023-06-01');
+        req.setHeader('api-key', settings.LLM_API_Key__c);
         req.setBody(JSON.serialize(requestBody));
         req.setTimeout(30000);
 
@@ -57,8 +68,12 @@ public class LLMService {
             HttpResponse res = http.send(req);
             if (res.getStatusCode() == 200) {
                 Map<String, Object> body = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
-                List<Object> content = (List<Object>) body.get('content');
-                return (String) ((Map<String, Object>) content[0]).get('text');
+                List<Object> choices = (List<Object>) body.get('choices');
+                if (choices != null && !choices.isEmpty()) {
+                    Map<String, Object> firstChoice = (Map<String, Object>) choices[0];
+                    Map<String, Object> message = (Map<String, Object>) firstChoice.get('message');
+                    return message == null ? null : (String) message.get('content');
+                }
             }
         } catch (Exception e) {
             System.debug('LLM 오류: ' + e.getMessage());
@@ -76,7 +91,7 @@ public static String analyzeMarketResearch(String accountName, Map<String, Objec
     String prompt = accountName + ' 기업에 대한 영업 인사이트를 한국어로 작성해주세요.\n\n'
         + '데이터: ' + JSON.serialize(data) + '\n\n'
         + '1. 현재 상황 요약\n2. 영업 기회 포인트\n3. 주의사항\n4. 추천 액션 3가지';
-    return callClaude(prompt);
+    return callAzureOpenAI(prompt);
 }
 ```
 
@@ -85,7 +100,7 @@ public static String analyzeMarketResearch(String accountName, Map<String, Objec
 public static String generateEmail(Account acc, String purpose) {
     String prompt = '다음 정보로 영업 이메일 초안을 한국어로 작성해주세요.\n'
         + '고객사: ' + acc.Name + ' / 업종: ' + acc.Industry + ' / 목적: ' + purpose;
-    return callClaude(prompt);
+    return callAzureOpenAI(prompt);
 }
 ```
 
@@ -93,7 +108,7 @@ public static String generateEmail(Account acc, String purpose) {
 ```apex
 public static String generateMeetingChecklist(Account acc, String meetingDate) {
     String prompt = acc.Name + ' 미팅(' + meetingDate + ') 준비 체크리스트와 예상 Q&A를 한국어로 작성해주세요.';
-    return callClaude(prompt);
+    return callAzureOpenAI(prompt);
 }
 ```
 
@@ -103,7 +118,7 @@ public static Map<String, Object> analyzeCommLog(String logContent, String commT
     String prompt = commType + ' 내용을 분석하여 아래 JSON 형식으로만 응답해주세요.\n\n'
         + '내용: ' + logContent + '\n\n'
         + '{"summary":"5줄 요약","actionItems":[{"subject":"","description":"","priority":"High/Normal/Low","dueDate":"YYYY-MM-DD"}],"nextBestAction":"추천 액션"}';
-    String response = callClaude(prompt);
+    String response = callAzureOpenAI(prompt);
     return (Map<String, Object>) JSON.deserializeUntyped(response);
 }
 ```
@@ -113,7 +128,7 @@ public static Map<String, Object> analyzeCommLog(String logContent, String commT
 public static String generateSalesStrategy(Account acc) {
     String prompt = acc.Name + ' 영업전략을 단기(이번 주)/중기(이번 달)/장기(분기)로 나눠 한국어로 작성해주세요.\n'
         + '업종: ' + acc.Industry + ' / 마지막 활동: ' + acc.LastActivityDate;
-    return callClaude(prompt);
+    return callAzureOpenAI(prompt);
 }
 ```
 
@@ -123,23 +138,18 @@ public static List<Map<String, Object>> recommendOpportunities(List<Opportunity>
     String prompt = '과거 영업 이력 기반으로 신규 사업기회를 추천해주세요.\n\n'
         + '이력: ' + JSON.serialize(history) + '\nAccount: ' + JSON.serialize(accounts) + '\n\n'
         + 'JSON 배열로만 응답: [{"accountName":"","reason":"","score":0,"nextAction":""}]';
-    String response = callClaude(prompt);
+    String response = callAzureOpenAI(prompt);
     return (List<Map<String, Object>>) JSON.deserializeUntyped(response);
 }
 ```
 
-## 프롬프트 규칙
-- 반드시 한국어 응답 요청
-- JSON 응답 필요 시 형식 명확히 지정하고 JSON으로만 응답 요청
-- 응답 길이 제한 명시 (토큰 절약)
-
-### 미팅 내용 분석
+### 미팅 내용 분석 (음성 녹취 포함)
 ```apex
 public static Map<String, Object> analyzeMeetingTranscript(String transcript) {
     String prompt = '다음 미팅 녹취 내용을 분석하여 아래 JSON 형식으로만 응답해주세요.\n\n'
         + '녹취: ' + transcript + '\n\n'
         + '{"summary":"5줄 핵심 요약","actionItems":[{"subject":"","description":"","priority":"High/Normal/Low","dueDate":"YYYY-MM-DD"}]}';
-    String response = callClaude(prompt);
+    String response = callAzureOpenAI(prompt);
     return (Map<String, Object>) JSON.deserializeUntyped(response);
 }
 ```
@@ -154,6 +164,22 @@ public static String analyzeMeetingHistory(String accountName, List<Task> pastMe
         + '2. 주요 논의 주제 및 진행 현황\n'
         + '3. 미완료 Action Item\n'
         + '4. 영업전략 조언 (단기/중기/장기)';
-    return callClaude(prompt);
+    return callAzureOpenAI(prompt);
 }
 ```
+
+### 챗봇용 SF 데이터 기반 응답
+```apex
+public static String chatWithSalesData(String question, String salesData) {
+    String prompt = '다음 Salesforce 데이터를 바탕으로 질문에 한국어로 답변해주세요.\n\n'
+        + '질문: ' + question + '\n\n'
+        + 'SF 데이터: ' + salesData + '\n\n'
+        + '각 레코드는 번호 목록으로 나열하고, 핵심 정보만 간결하게 표시해주세요.';
+    return callAzureOpenAI(prompt);
+}
+```
+
+## 프롬프트 규칙
+- 반드시 한국어 응답 요청
+- JSON 응답 필요 시 형식 명확히 지정하고 "JSON으로만 응답" 요청
+- 응답 길이 제한 명시 (토큰 절약)

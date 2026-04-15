@@ -1,9 +1,15 @@
 /**
- * Sales Cloud 자연어 질의: Claude로 조회 의도(JSON) 파싱 → 안전한 SOQL 조회 → Claude로 한국어 답변.
+ * Sales Cloud 자연어 질의: LLM으로 조회 의도(JSON) 파싱 → 안전한 SOQL 조회 → 한국어 답변 생성.
  */
 public with sharing class ChatbotService {
     private static final Integer ABSOLUTE_MAX_ROWS = 50;
     private static final Integer DEFAULT_MAX_ROWS = 20;
+    // 객체별 관련 레코드에 노출할 기본 필드(API Name) 설정
+    private static final Map<String, List<String>> OBJECT_DISPLAY_FIELDS = new Map<String, List<String>>{
+        'Account' => new List<String>{ 'Type', 'IsInternal_fm__c' },
+        'Opportunity' => new List<String>{ 'Amount', 'StageName', 'ExpectedContractDate__c', 'DeliveryOrgList__c'},
+        'Contact' => new List<String>{ 'Account.Name', 'Phone', 'Email' }
+    };
 
     @AuraEnabled
     public static Map<String, Object> askSalesCloud(String question) {
@@ -19,7 +25,7 @@ public with sharing class ChatbotService {
             String intentRaw = LLMService.callClaude(buildIntentPrompt(trimmed));
             Map<String, Object> intent = parseIntent(intentRaw);
             List<Map<String, Object>> salesRecords = fetchSalesRecords(intent);
-            String dataPayload = JSON.serialize(salesRecords);
+            String dataPayload = JSON.serialize(buildLlmSafeRecords(salesRecords));
             String answerText = LLMService.callClaude(buildAnswerPrompt(trimmed, dataPayload));
 
             return new Map<String, Object>{
@@ -53,7 +59,8 @@ public with sharing class ChatbotService {
     private static String buildAnswerPrompt(String question, String salesDataJson) {
         return '다음 Salesforce에서 조회한 실제 데이터(JSON)만 근거로, 사용자 질문에 한국어로 답변하세요.\n'
             + '데이터에 없는 사실은 만들지 마세요. 결과가 없으면 그렇게 말하세요.\n'
-            + '번호 목록으로 레코드를 나열하고, 각 항목은 핵심 필드(금액, 단계, 마감일, 상태 등)를 한두 줄로 요약하세요.\n\n'
+            + '번호 목록으로 레코드를 나열하고, 각 항목은 핵심 필드(금액, 단계, 마감일, 상태 등)를 한두 줄로 요약하세요.\n'
+            + '중요: URL, recordUrl, 하이퍼링크([자세히 보기] 포함)는 절대 출력하지 마세요.\n\n'
             + '질문: ' + question + '\n\n'
             + 'SF 데이터(JSON): ' + salesDataJson;
     }
@@ -155,6 +162,7 @@ public with sharing class ChatbotService {
     private static void addRecord(
         List<Map<String, Object>> bucket,
         String objectApiName,
+        String objectLabel,
         Id recordId,
         String title,
         String snippet
@@ -162,12 +170,90 @@ public with sharing class ChatbotService {
         bucket.add(
             new Map<String, Object>{
                 'objectApiName' => objectApiName,
+                'objectLabel' => objectLabel,
                 'recordId' => String.valueOf(recordId),
                 'recordUrl' => baseOrgUrl() + '/lightning/r/' + objectApiName + '/' + recordId + '/view',
                 'title' => title,
                 'snippet' => snippet
             }
         );
+    }
+
+    private static String getObjectLabel(String objectApiName) {
+        try {
+            Map<String, Schema.SObjectType> globalMap = Schema.getGlobalDescribe();
+            if (globalMap.containsKey(objectApiName)) {
+                return globalMap.get(objectApiName).getDescribe().getLabel();
+            }
+            return objectApiName;
+        } catch (Exception e) {
+            System.debug('오브젝트 라벨 조회 실패: ' + e.getMessage());
+            return objectApiName;
+        }
+    }
+
+    private static String buildLabeledSnippet(SObject row, String objectApiName) {
+        List<String> fields = OBJECT_DISPLAY_FIELDS.get(objectApiName);
+        if (fields == null || fields.isEmpty()) {
+            return '';
+        }
+
+        Schema.DescribeSObjectResult describeObj = row.getSObjectType().getDescribe();
+        Map<String, Schema.SObjectField> fieldMap = describeObj.fields.getMap();
+        List<String> chunks = new List<String>();
+
+        for (String fieldApiName : fields) {
+            if (!fieldMap.containsKey(fieldApiName)) {
+                continue;
+            }
+            Object val = row.get(fieldApiName);
+            if (val == null) {
+                continue;
+            }
+            String rendered = renderFieldValue(fieldMap.get(fieldApiName).getDescribe(), val);
+            if (String.isBlank(rendered)) {
+                continue;
+            }
+            String label = fieldMap.get(fieldApiName).getDescribe().getLabel();
+            chunks.add(label + ': ' + rendered);
+        }
+        return String.join(chunks, ' / ');
+    }
+
+    private static String renderFieldValue(Schema.DescribeFieldResult fieldDescribe, Object rawValue) {
+        if (rawValue == null) {
+            return null;
+        }
+        String valueText = String.valueOf(rawValue);
+        if (String.isBlank(valueText)) {
+            return null;
+        }
+
+        if (fieldDescribe.getType() == Schema.DisplayType.Picklist) {
+            for (Schema.PicklistEntry entry : fieldDescribe.getPicklistValues()) {
+                if (entry.getValue() == valueText) {
+                    return entry.getLabel();
+                }
+            }
+        }
+        return valueText;
+    }
+
+    private static List<Map<String, Object>> buildLlmSafeRecords(List<Map<String, Object>> salesRecords) {
+        List<Map<String, Object>> safe = new List<Map<String, Object>>();
+        if (salesRecords == null) {
+            return safe;
+        }
+        for (Map<String, Object> rec : salesRecords) {
+            safe.add(
+                new Map<String, Object>{
+                    'objectLabel' => rec.get('objectLabel'),
+                    'title' => rec.get('title'),
+                    'snippet' => rec.get('snippet')
+                }
+            );
+        }
+        return safe;
     }
 
     private static List<Map<String, Object>> fetchSalesRecords(Map<String, Object> intent) {
@@ -239,21 +325,14 @@ public with sharing class ChatbotService {
 
     private static void fetchAccounts(List<Map<String, Object>> out, Id uid, String likePattern, Integer lim) {
         String soql =
-            'SELECT Id, Name, Industry, Type FROM Account WHERE OwnerId = :uid';
+            'SELECT Id, Name, Industry, Type, AnnualRevenue, IsInternal_fm__c FROM Account WHERE OwnerId = :uid';
         if (String.isNotBlank(likePattern)) {
             soql += ' AND Name LIKE :likePattern';
         }
         soql += ' ORDER BY LastModifiedDate DESC LIMIT :lim';
         List<Account> rows = Database.query(soql);
         for (Account a : rows) {
-            String snip = '';
-            if (String.isNotBlank(a.Industry)) {
-                snip += '업종: ' + a.Industry + ' ';
-            }
-            if (String.isNotBlank(a.Type)) {
-                snip += '유형: ' + a.Type;
-            }
-            addRecord(out, 'Account', a.Id, a.Name, snip.trim());
+            addRecord(out, 'Account', getObjectLabel('Account'), a.Id, a.Name, buildLabeledSnippet(a, 'Account'));
         }
     }
 
@@ -270,7 +349,8 @@ public with sharing class ChatbotService {
         Integer lim
     ) {
         String soql =
-            'SELECT Id, Name, Amount, StageName, CloseDate, Account.Name FROM Opportunity WHERE OwnerId = :uid';
+            'SELECT Id, Name, Amount, StageName, CloseDate, ExpectedContractDate__c, DeliveryOrgList__c, Account.Name '
+            + 'FROM Opportunity WHERE OwnerId = :uid';
         if (closeThis == true) {
             soql += ' AND CloseDate >= :startThis AND CloseDate <= :endThis';
         } else if (closeNext == true) {
@@ -282,24 +362,20 @@ public with sharing class ChatbotService {
         soql += ' ORDER BY CloseDate ASC NULLS LAST LIMIT :lim';
         List<Opportunity> rows = Database.query(soql);
         for (Opportunity o : rows) {
-            String amt = o.Amount != null ? String.valueOf(o.Amount) : '-';
-            String snip = '금액: ' + amt + ' / 단계: ' + (o.StageName != null ? o.StageName : '-') + ' / 마감: ' + String.valueOf(o.CloseDate);
-            addRecord(out, 'Opportunity', o.Id, o.Name, snip);
+            addRecord(out, 'Opportunity', getObjectLabel('Opportunity'), o.Id, o.Name, buildLabeledSnippet(o, 'Opportunity'));
         }
     }
 
     private static void fetchContacts(List<Map<String, Object>> out, Id uid, String likePattern, Integer lim) {
         String soql =
-            'SELECT Id, Name, Email, Account.Name FROM Contact WHERE (OwnerId = :uid OR Account.OwnerId = :uid)';
+            'SELECT Id, Name, Email, Phone, Title, Account.Name FROM Contact WHERE (OwnerId = :uid OR Account.OwnerId = :uid)';
         if (String.isNotBlank(likePattern)) {
             soql += ' AND (Name LIKE :likePattern OR Account.Name LIKE :likePattern)';
         }
         soql += ' ORDER BY LastModifiedDate DESC LIMIT :lim';
         List<Contact> rows = Database.query(soql);
         for (Contact c : rows) {
-            String snip = '이메일: ' + (String.isNotBlank(c.Email) ? c.Email : '-') + ' / Account: ' +
-                (c.Account != null ? c.Account.Name : '-');
-            addRecord(out, 'Contact', c.Id, c.Name, snip);
+            addRecord(out, 'Contact', getObjectLabel('Contact'), c.Id, c.Name, buildLabeledSnippet(c, 'Contact'));
         }
     }
 
@@ -321,10 +397,8 @@ public with sharing class ChatbotService {
         soql += ' ORDER BY ActivityDate ASC NULLS LAST LIMIT :lim';
         List<Task> rows = Database.query(soql);
         for (Task t : rows) {
-            String snip = '상태: ' + (t.Status != null ? t.Status : '-') + ' / 우선순위: ' +
-                (t.Priority != null ? t.Priority : '-') + ' / 기한: ' + String.valueOf(t.ActivityDate);
             String title = String.isNotBlank(t.Subject) ? t.Subject : '(제목 없음)';
-            addRecord(out, 'Task', t.Id, title, snip);
+            addRecord(out, 'Task', getObjectLabel('Task'), t.Id, title, buildLabeledSnippet(t, 'Task'));
         }
     }
 }

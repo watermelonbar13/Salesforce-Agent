@@ -8,6 +8,8 @@ export default class SalesChatbot extends NavigationMixin(LightningElement) {
     @track error;
     @track answer;
     @track records = [];
+    @track isAnswerExpanded = true;
+    @track isRecordsExpanded = true;
 
     get hasResults() {
         const hasAnswer = !!(this.answer && String(this.answer).trim());
@@ -29,6 +31,8 @@ export default class SalesChatbot extends NavigationMixin(LightningElement) {
         this.error = undefined;
         this.answer = undefined;
         this.records = [];
+        this.isAnswerExpanded = true;
+        this.isRecordsExpanded = true;
 
         try {
             const result = await askSalesCloud({ question: q });
@@ -39,6 +43,30 @@ export default class SalesChatbot extends NavigationMixin(LightningElement) {
         } finally {
             this.isLoading = false;
         }
+    }
+
+    get answerToggleLabel() {
+        return this.isAnswerExpanded ? '답변 접기' : '답변 펼치기';
+    }
+
+    get answerToggleIcon() {
+        return this.isAnswerExpanded ? 'utility:chevrondown' : 'utility:chevronright';
+    }
+
+    get recordsToggleLabel() {
+        return this.isRecordsExpanded ? '관련 레코드 접기' : '관련 레코드 펼치기';
+    }
+
+    get recordsToggleIcon() {
+        return this.isRecordsExpanded ? 'utility:chevrondown' : 'utility:chevronright';
+    }
+
+    toggleAnswerSection() {
+        this.isAnswerExpanded = !this.isAnswerExpanded;
+    }
+
+    toggleRecordsSection() {
+        this.isRecordsExpanded = !this.isRecordsExpanded;
     }
 
     handleOpenRecord(event) {

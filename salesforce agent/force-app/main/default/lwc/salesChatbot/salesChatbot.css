@@ -96,6 +96,16 @@
     margin-bottom: 0.5rem;
 }
 
+.chatbot-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chatbot-section-header .chatbot-section-label {
+    margin-bottom: 0;
+}
+
 .chatbot-section-icon {
     --slds-c-icon-color-foreground-default: #706e6b;
 }

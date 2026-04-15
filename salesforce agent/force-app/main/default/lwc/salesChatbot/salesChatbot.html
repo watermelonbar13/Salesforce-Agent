@@ -82,61 +82,83 @@
 
             <template if:true={answer}>
                 <section class="chatbot-answer slds-m-top_medium" aria-live="polite">
-                    <div class="chatbot-section-label">
-                        <lightning-icon
-                            icon-name="utility:comments"
-                            alternative-text=""
-                            size="xx-small"
-                            class="chatbot-section-icon"
-                        ></lightning-icon>
-                        <span>답변</span>
+                    <div class="chatbot-section-header">
+                        <div class="chatbot-section-label">
+                            <lightning-icon
+                                icon-name="utility:comments"
+                                alternative-text=""
+                                size="xx-small"
+                                class="chatbot-section-icon"
+                            ></lightning-icon>
+                            <span>답변</span>
+                        </div>
+                        <lightning-button-icon
+                            icon-name={answerToggleIcon}
+                            alternative-text={answerToggleLabel}
+                            title={answerToggleLabel}
+                            variant="bare"
+                            onclick={toggleAnswerSection}
+                        ></lightning-button-icon>
                     </div>
-                    <div class="assistant-bubble slds-scrollable_y">{answer}</div>
+                    <template if:true={isAnswerExpanded}>
+                        <div class="assistant-bubble slds-scrollable_y">{answer}</div>
+                    </template>
                 </section>
             </template>
 
             <template if:true={records.length}>
                 <section class="chatbot-records slds-m-top_medium">
-                    <div class="chatbot-section-label">
-                        <lightning-icon
-                            icon-name="utility:linked"
-                            alternative-text=""
-                            size="xx-small"
-                            class="chatbot-section-icon"
-                        ></lightning-icon>
-                        <span>관련 레코드</span>
+                    <div class="chatbot-section-header">
+                        <div class="chatbot-section-label">
+                            <lightning-icon
+                                icon-name="utility:linked"
+                                alternative-text=""
+                                size="xx-small"
+                                class="chatbot-section-icon"
+                            ></lightning-icon>
+                            <span>관련 레코드</span>
+                        </div>
+                        <lightning-button-icon
+                            icon-name={recordsToggleIcon}
+                            alternative-text={recordsToggleLabel}
+                            title={recordsToggleLabel}
+                            variant="bare"
+                            onclick={toggleRecordsSection}
+                        ></lightning-button-icon>
                     </div>
-                    <ul class="record-list">
-                        <template for:each={records} for:item="rec">
-                            <li key={rec.recordId} class="record-list-item">
-                                <div class="record-card slds-grid slds-grid_vertical-align-center">
-                                    <div class="slds-col slds-grow record-card-main">
-                                        <div class="record-meta">
-                                            <lightning-badge
-                                                label={rec.objectApiName}
-                                                class="record-badge"
-                                            ></lightning-badge>
+                    <template if:true={isRecordsExpanded}>
+                        <ul class="record-list">
+                            <template for:each={records} for:item="rec">
+                                <li key={rec.recordId} class="record-list-item">
+                                    <div class="record-card slds-grid slds-grid_vertical-align-center">
+                                        <div class="slds-col slds-grow record-card-main">
+                                            <div class="record-meta">
+                                                <lightning-badge
+                                                    label={rec.objectLabel}
+                                                    class="record-badge"
+                                                ></lightning-badge>
+                                            </div>
+                                            <div class="record-title slds-text-body_regular">{rec.title}</div>
+                                            <template if:true={rec.snippet}>
+                                                <div class="record-snippet slds-text-body_small">{rec.snippet}</div>
+                                            </template>
                                         </div>
-                                        <div class="record-title slds-text-body_regular">{rec.title}</div>
-                                        <template if:true={rec.snippet}>
-                                            <div class="record-snippet slds-text-body_small">{rec.snippet}</div>
-                                        </template>
+                                        <div class="slds-col slds-no-flex record-card-action">
+                                            <lightning-button
+                                                variant="neutral"
+                                                label="열기"
+                                                title="레코드 열기"
+                                                icon-name="utility:new_window"
+                                                data-object={rec.objectApiName}
+                                                data-id={rec.recordId}
+                                                onclick={handleOpenRecord}
+                                            ></lightning-button>
+                                        </div>
                                     </div>
-                                    <div class="slds-col slds-no-flex record-card-action">
-                                        <lightning-button
-                                            variant="neutral"
-                                            label="열기"
-                                            title="레코드 열기"
-                                            icon-name="utility:new_window"
-                                            data-object={rec.objectApiName}
-                                            data-id={rec.recordId}
-                                            onclick={handleOpenRecord}
-                                        ></lightning-button>
-                                    </div>
-                                </div>
-                            </li>
-                        </template>
-                    </ul>
+                                </li>
+                            </template>
+                        </ul>
+                    </template>
                 </section>
             </template>
 

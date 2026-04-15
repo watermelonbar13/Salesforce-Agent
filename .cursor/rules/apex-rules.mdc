@@ -24,12 +24,15 @@ alwaysApply: true
 - WHERE 조건에 인덱스 필드 우선 사용 (Id, OwnerId, CreatedDate)
 - 동적 SOQL 사용 시 반드시 String.escapeSingleQuotes() 처리
 - SOQL in loop 금지 (bulkify 패턴 사용)
+- 조회/저장 전 CRUD/FLS 점검 필수 (`Schema.sObjectType`, `Security.stripInaccessible`, `WITH SECURITY_ENFORCED` 활용)
 
 ## 에러 처리
 - 모든 메서드 try-catch 필수
 - LWC 전달 에러는 AuraHandledException 사용
 - 에러 메시지는 반드시 한국어로
 - System.debug()로 에러 로깅 필수
+- 외부 연동 실패 시 사용자용 메시지와 내부 로그 메시지 분리
+- 부분 성공이 가능한 저장 로직은 성공/실패 목록을 함께 반환
 
 ```apex
 try {
@@ -45,6 +48,22 @@ try {
 - Named Credential 반드시 사용 (URL 하드코딩 금지)
 - API 키는 Custom Settings에 저장
 - Callout과 DML은 같은 트랜잭션에서 사용 금지
+
+## 운영 필수 규칙
+- `@AuraEnabled(cacheable=true)`는 조회 전용 메서드에만 사용하고, DML 또는 Callout이 있으면 사용 금지
+- LWC 호출 Apex 메서드는 표준 응답 래퍼 구조 사용 권장:
+  - `success` (Boolean)
+  - `message` (String, 사용자용 한국어 메시지)
+  - `data` (Object/List)
+  - `errors` (List<String>, 상세 실패 목록)
+- 외부 API/LLM 실패 시 에러 코드별 사용자 메시지 매핑 유지 (400/401/429/500/timeout)
+- 다건 저장은 `Database.insert(records, false)` 형태의 부분 성공 패턴 우선 적용
+- 트랜잭션 분리 원칙:
+  - 핵심 본문 저장(예: 활동 내용) 먼저 처리
+  - 후속 항목 저장(예: 액션 아이템)은 별도 단계로 처리하여 재시도 가능하게 설계
+- 보안 원칙:
+  - Query는 가능하면 `WITH SECURITY_ENFORCED` 사용
+  - DML 전 `Security.stripInaccessible(AccessType.CREATABLE/UPDATABLE, records)` 적용 권장
 
 ## 테스트 코드
 - 테스트 커버리지 75% 이상 유지

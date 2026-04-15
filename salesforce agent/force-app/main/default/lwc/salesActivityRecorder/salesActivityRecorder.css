@@ -1,0 +1,24 @@
+.recorder-root {
+    border-radius: 0.5rem;
+    border: 1px solid #d8dde6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tab-section {
+    padding: 0.75rem 0.5rem;
+}
+
+.record-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.action-item-row {
+    border: 1px solid #dddbda;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background-color: #ffffff;
+}

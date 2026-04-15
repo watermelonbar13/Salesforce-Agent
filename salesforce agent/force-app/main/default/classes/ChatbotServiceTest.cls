@@ -65,9 +65,9 @@ private class ChatbotServiceTest {
             res.setHeader('Content-Type', 'application/json');
             callCount++;
             if (callCount == 1) {
-                res.setBody('{"content":[{"type":"text","text":' + JSON.serialize(firstCallText) + '}]}');
+                res.setBody('{"choices":[{"message":{"role":"assistant","content":' + JSON.serialize(firstCallText) + '}}]}');
             } else {
-                res.setBody('{"content":[{"type":"text","text":' + JSON.serialize(secondAnswer) + '}]}');
+                res.setBody('{"choices":[{"message":{"role":"assistant","content":' + JSON.serialize(secondAnswer) + '}}]}');
             }
             return res;
         }
