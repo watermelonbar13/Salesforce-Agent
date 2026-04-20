@@ -28,7 +28,7 @@ private class SalesCommServiceTest {
     static void analyzeRecording_returnsSchema() {
         String llmJson =
             '{"summary":"요약입니다","actionItems":[{"subject":"후속 미팅","priority":"High","dueDate":"2026-04-20","reason":"고객 요청"}],'
-            + '"warnings":[],"confidence":0.8}';
+            + '"nextBestActions":["이번 주 내 기술검증 일정 확정","기술담당자 동석 미팅 제안"],"warnings":[],"confidence":0.8}';
         Test.setMock(HttpCalloutMock.class, new LlmMock(new List<String>{ llmJson }));
 
         Test.startTest();
@@ -36,6 +36,7 @@ private class SalesCommServiceTest {
         Test.stopTest();
 
         System.assertEquals('요약입니다', result.get('summary'));
+        System.assert(result.get('nextBestActions') instanceof List<Object>, 'nextBestActions는 리스트여야 합니다.');
         System.assert(result.get('actionItems') instanceof List<Object>, 'actionItems는 리스트여야 합니다.');
     }
 

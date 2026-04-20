@@ -8,11 +8,45 @@
     padding: 0.75rem 0.5rem;
 }
 
+.section-box {
+    border: 1px solid #dddbda;
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+    background-color: #ffffff;
+}
+
+.section-title {
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.task-row {
+    border-bottom: 1px solid #f1f1f1;
+    padding: 0.4rem 0;
+}
+
+.task-row:last-child {
+    border-bottom: 0;
+}
+
+.bullet-list {
+    margin: 0;
+    padding-left: 1rem;
+}
+
+.pre-wrap {
+    white-space: pre-wrap;
+}
+
 .record-actions {
     display: flex;
     gap: 0.5rem;
     align-items: center;
     flex-wrap: wrap;
+}
+
+.mic-button {
+    margin-right: 0.25rem;
 }
 
 .action-item-row {

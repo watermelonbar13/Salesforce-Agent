@@ -1,6 +1,7 @@
 public with sharing class SalesCommService {
     private static final Integer RECENT_ACTIVITY_LIMIT = 5;
     private static final Integer ACTION_ITEM_LIMIT = 10;
+    private static final Integer INCOMPLETE_TASK_LIMIT = 10;
 
     @AuraEnabled
     public static String getAISalesAdvice(
@@ -80,6 +81,31 @@ public with sharing class SalesCommService {
         } catch (Exception e) {
             System.debug('analyzeRecording 오류: ' + e.getMessage());
             throw new AuraHandledException('녹음 분석 중 오류가 발생했습니다.');
+        }
+    }
+
+    @AuraEnabled
+    public static Map<String, Object> getPreMeetingPreparation(Id activityId) {
+        try {
+            if (activityId == null) {
+                throw new AuraHandledException('활동 레코드 정보가 없습니다.');
+            }
+            Map<String, Id> contextIds = resolveContextIds(activityId, 'SalesActivity__c', null, null);
+            Id accountId = contextIds.get('accountId');
+            Id opportunityId = contextIds.get('opportunityId');
+
+            List<Map<String, Object>> previousActivities = loadPreviousActivitiesForAdvice(accountId, opportunityId);
+            List<Map<String, Object>> incompleteTasks = loadIncompleteTasks(accountId, opportunityId);
+
+            String prompt = buildPreMeetingPrompt(previousActivities, incompleteTasks);
+            String raw = LLMService.callClaude(prompt);
+
+            return parsePreMeetingResponse(raw, previousActivities, incompleteTasks);
+        } catch (AuraHandledException e) {
+            throw e;
+        } catch (Exception e) {
+            System.debug('getPreMeetingPreparation 오류: ' + e.getMessage());
+            throw new AuraHandledException('미팅 전 준비 정보 생성 중 오류가 발생했습니다.');
         }
     }
 
@@ -391,10 +417,28 @@ public with sharing class SalesCommService {
         return '다음 녹취를 분석해 JSON 한 개만 반환하세요.\n'
             + '스키마:\n'
             + '{"summary":"string","actionItems":[{"subject":"string","priority":"High|Normal|Low","dueDate":"YYYY-MM-DD","reason":"string"}],'
-            + '"warnings":["string"],"confidence":0.0}\n'
-            + '규칙: summary는 한국어 10줄 이내, actionItems 최대 10건, dueDate 없으면 null 허용.\n'
+            + '"nextBestActions":["string"],"warnings":["string"],"confidence":0.0}\n'
+            + '규칙:\n'
+            + '- summary는 상급자 보고용으로 충분히 상세하게 작성 (고객상황/요구사항/리스크/기회/쟁점/합의사항/후속계획 포함)\n'
+            + '- actionItems 최대 10건, dueDate 없으면 null 허용\n'
+            + '- nextBestActions는 실행 가능한 후보를 최대 10건까지 제시\n'
             + '녹취:\n'
             + transcriptText;
+    }
+
+    private static String buildPreMeetingPrompt(
+        List<Map<String, Object>> previousActivities,
+        List<Map<String, Object>> incompleteTasks
+    ) {
+        return '당신은 B2B 영업 미팅 코치입니다. 아래 데이터를 기반으로 미팅 전 준비 정보를 JSON 한 개로만 반환하세요.\n'
+            + '스키마:\n'
+            + '{"previousMeetingSummary":"string","recommendedTopics":["string"],"warnings":["string"]}\n'
+            + '규칙:\n'
+            + '- previousMeetingSummary: 이전 미팅 흐름/결정사항/미해결 이슈/담당자 관점 핵심을 한국어로 자세히 작성\n'
+            + '- recommendedTopics: 이번 미팅에서 다뤄야 할 대화 주제와 질문을 6개 이내로 제시\n'
+            + '- warnings: 없으면 빈 배열\n'
+            + '이전활동 JSON=' + JSON.serialize(previousActivities) + '\n'
+            + '미완료 Task JSON=' + JSON.serialize(incompleteTasks);
     }
 
     private static Map<String, Object> parseAdviceResponse(
@@ -448,6 +492,7 @@ public with sharing class SalesCommService {
         Map<String, Object> fallback = new Map<String, Object>{
             'summary' => '',
             'actionItems' => new List<Object>(),
+            'nextBestActions' => new List<String>(),
             'warnings' => new List<String>{ 'AI 응답 파싱 실패' },
             'confidence' => 0.0
         };
@@ -460,6 +505,7 @@ public with sharing class SalesCommService {
             Map<String, Object> out = new Map<String, Object>{
                 'summary' => safeString(parsed.get('summary'), ''),
                 'actionItems' => sanitizeActionItems(parsed.get('actionItems')),
+                'nextBestActions' => limitStringList(parsed.get('nextBestActions'), 10),
                 'warnings' => limitStringList(parsed.get('warnings'), 10),
                 'confidence' => normalizeConfidence(parsed.get('confidence'))
             };
@@ -467,6 +513,136 @@ public with sharing class SalesCommService {
         } catch (Exception e) {
             return fallback;
         }
+    }
+
+    private static Map<String, Object> parsePreMeetingResponse(
+        String raw,
+        List<Map<String, Object>> previousActivities,
+        List<Map<String, Object>> incompleteTasks
+    ) {
+        Map<String, Object> fallback = new Map<String, Object>{
+            'previousMeetingSummary' => buildFallbackPreviousSummary(previousActivities),
+            'incompleteTasks' => incompleteTasks,
+            'recommendedTopics' => buildFallbackTopics(previousActivities, incompleteTasks),
+            'warnings' => new List<String>()
+        };
+
+        try {
+            Object parsedAny = JSON.deserializeUntyped(stripJsonFence(raw));
+            if (!(parsedAny instanceof Map<String, Object>)) {
+                return fallback;
+            }
+            Map<String, Object> parsed = (Map<String, Object>) parsedAny;
+            fallback.put(
+                'previousMeetingSummary',
+                safeString(parsed.get('previousMeetingSummary'), (String) fallback.get('previousMeetingSummary'))
+            );
+            fallback.put('recommendedTopics', limitStringList(parsed.get('recommendedTopics'), 6));
+            fallback.put('warnings', limitStringList(parsed.get('warnings'), 10));
+            return fallback;
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private static String buildFallbackPreviousSummary(List<Map<String, Object>> previousActivities) {
+        if (previousActivities == null || previousActivities.isEmpty()) {
+            return '이전 미팅 이력이 없어 이번 미팅에서 고객 현황 파악 질문을 우선 진행해 주세요.';
+        }
+        List<String> lines = new List<String>();
+        Integer count = 0;
+        for (Map<String, Object> item : previousActivities) {
+            if (count >= 3) {
+                break;
+            }
+            String subject = safeString(item.get('subject'), '영업활동');
+            String content = safeString(item.get('activityContent'), '상세 내용 없음');
+            lines.add('- ' + subject + ': ' + content);
+            count++;
+        }
+        return '최근 미팅 흐름 요약\n' + String.join(lines, '\n');
+    }
+
+    private static List<String> buildFallbackTopics(
+        List<Map<String, Object>> previousActivities,
+        List<Map<String, Object>> incompleteTasks
+    ) {
+        List<String> topics = new List<String>{
+            '지난 미팅에서 합의한 일정의 진행률을 확인해 주세요.',
+            '고객이 최근 가장 우선순위로 보는 과제를 질문해 주세요.',
+            '도입 시 기술/예산/보안 관점의 의사결정 기준을 확인해 주세요.'
+        };
+        if (incompleteTasks != null && !incompleteTasks.isEmpty()) {
+            topics.add('미완료 Task의 지연 사유와 해결 계획을 확인해 주세요.');
+        }
+        if (previousActivities == null || previousActivities.isEmpty()) {
+            topics.add('현재 운영 환경과 Pain Point를 구조적으로 파악해 주세요.');
+        }
+        return topics;
+    }
+
+    private static List<Map<String, Object>> loadIncompleteTasks(Id accountId, Id opportunityId) {
+        List<Map<String, Object>> out = new List<Map<String, Object>>();
+        if (accountId == null && opportunityId == null) {
+            return out;
+        }
+
+        Schema.SObjectType taskType = Schema.getGlobalDescribe().get('SalesActionItem__c');
+        if (taskType == null) {
+            return out;
+        }
+        Map<String, Schema.SObjectField> taskFields = taskType.getDescribe().fields.getMap();
+        if (!taskFields.containsKey('Activity__c')) {
+            return out;
+        }
+
+        List<String> selectFields = new List<String>{ 'Id', 'Activity__c' };
+        if (taskFields.containsKey('Subject__c')) selectFields.add('Subject__c');
+        if (taskFields.containsKey('Priority__c')) selectFields.add('Priority__c');
+        if (taskFields.containsKey('DueDate__c')) selectFields.add('DueDate__c');
+        if (taskFields.containsKey('Status__c')) selectFields.add('Status__c');
+        selectFields.add('Activity__r.RelatedAccount__c');
+        selectFields.add('Activity__r.RelatedOpportunity__c');
+
+        String soql = 'SELECT ' + String.join(selectFields, ',') + ' FROM SalesActionItem__c';
+        List<String> whereParts = new List<String>();
+        if (taskFields.containsKey('Status__c')) {
+            whereParts.add('Status__c != \'Completed\'');
+            whereParts.add('Status__c != \'Cancelled\'');
+        }
+        List<String> relationParts = new List<String>();
+        if (accountId != null) {
+            relationParts.add('Activity__r.RelatedAccount__c = :accountId');
+        }
+        if (opportunityId != null) {
+            relationParts.add('Activity__r.RelatedOpportunity__c = :opportunityId');
+        }
+        if (!relationParts.isEmpty()) {
+            whereParts.add('(' + String.join(relationParts, ' OR ') + ')');
+        }
+        if (!whereParts.isEmpty()) {
+            soql += ' WHERE ' + String.join(whereParts, ' AND ');
+        }
+        soql += ' ORDER BY LastModifiedDate DESC LIMIT :INCOMPLETE_TASK_LIMIT';
+
+        try {
+            List<SObject> rows = Database.query(soql);
+            Integer index = 0;
+            for (SObject row : rows) {
+                out.add(
+                    new Map<String, Object>{
+                        'index' => index,
+                        'subject' => toStringOrNull(row.get('Subject__c')),
+                        'priority' => normalizePriority(toStringOrNull(row.get('Priority__c'))),
+                        'dueDate' => row.get('DueDate__c') == null ? null : String.valueOf(row.get('DueDate__c'))
+                    }
+                );
+                index++;
+            }
+        } catch (Exception e) {
+            System.debug('미완료 Task 조회 실패: ' + e.getMessage());
+        }
+        return out;
     }
 
     private static List<Map<String, Object>> sanitizeActionItems(Object rawItems) {

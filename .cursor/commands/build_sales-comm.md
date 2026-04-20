@@ -2,6 +2,14 @@
 
 미팅/통화 내용을 AI로 분석하고 영업활동 결과 및 액션 아이템을 SF Custom Object에 저장하는 기능을 만든다.
 
+## UI 기준
+- 화면 구성은 Figma 시안 기준으로 구현: [Figma 시안](https://www.figma.com/make/nePRZ4rEa4VW0TH4jthVMC/%EC%A0%9C%EB%AA%A9-%EC%97%86%EC%9D%8C?t=M2d9iRM6e8jHlejs-1)
+- 핵심 섹션:
+  - Activity Information
+  - Pre-Meeting Preparation
+  - Post-Meeting Analysis
+  - AI 분석 결과
+
 ## 전제 조건
 - SalesActivity__c, SalesActionItem__c Custom Object는 수동으로 생성된 상태로 가정
 - Setup → Session Settings → Lightning Web Security(LWS) 활성화 필요 (Web Speech API 사용)
@@ -72,9 +80,19 @@
 
 ### `analyzeRecording(transcriptText)`
 - 녹음 텍스트 분석
-- 영업활동 내용 요약 생성 (10줄 이내)
+- 영업활동 내용 요약 생성 (상급자 보고용으로 상세 작성)
 - Next Action 후보 목록 추출 (Subject / Priority: High·Normal·Low / DueDate 포함)
+- Next Best Action 후보 목록 생성 (단일 1건 제한 금지)
+- `nextBestActions`와 `actionItems` 병합 시 제목 기준 중복 제거 로직 적용 (공백/기호 차이 무시)
 - 아래 "AI 응답 스키마 계약" 형식으로 고정 반환
+
+### `getPreMeetingPreparation(activityId)`
+- 미팅 전 준비정보 생성
+- 포함 항목:
+  - 이전 미팅 이력 요약
+  - 미완료 Task 알림
+  - 추천 대화 주제 및 질문 리스트
+- activityId 기준 RelatedAccount__c / RelatedOpportunity__c 컨텍스트 자동 해석
 
 ### `getPreviousActivities(accountId, opportunityId)`
 - Account 또는 Opportunity 기준 SalesActivity__c 이력 조회
@@ -133,6 +151,7 @@
 ```json
 {
   "summary": "string",
+  "nextBestActions": ["string"],
   "actionItems": [
     {
       "subject": "string",
@@ -147,8 +166,9 @@
 ```
 
 ### 스키마 규칙
-- `summary`는 10줄 이내, 한국어
+- `summary`는 한국어, 상급자 보고용 상세 내용으로 생성
 - `actionItems` 최대 10건
+- `nextBestActions`는 회의 맥락에서 실행 가능한 후보를 다건으로 생성 (최대 10건)
 - `dueDate` 누락 시 `null` 허용
 - 파싱 실패 시 서버에서 기본값 반환:
   - `summary`: 빈 문자열
@@ -183,49 +203,37 @@
 **위치**: SalesActivity__c 레코드 페이지에 임베드  
 **역할**: SalesActivity__c 레코드 저장 이후 미팅/통화 결과 녹음 및 AI 분석
 
-### 탭1. 음성 녹음
+### 탭1. Activity Information
 
-- Web Speech API (SpeechRecognition)로 실시간 음성 → 텍스트 변환
-- "녹음 시작" 버튼: 마이크 활성화 + 실시간 텍스트 표시 + 경과 시간 타이머
-- "녹음 완료" 버튼: 녹음 중지 → AI 분석 자동 시작 → 탭2로 이동
-- 텍스트 직접 입력도 지원 (녹음 없이 탭2에서 "분석 시작" 버튼으로 실행 가능)
+- 영업활동 상세 내용 입력 (목적/참석자/니즈/리스크/결정사항 등)
+- 상급자 보고용 참고 메모 입력
 
-```javascript
-// Web Speech API 구현 핵심
-connectedCallback() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    this.recognition = new SpeechRecognition();
-    this.recognition.lang = 'ko-KR';        // 한국어
-    this.recognition.continuous = true;      // 연속 인식
-    this.recognition.interimResults = true;  // 중간 결과 실시간 표시
+### 탭2. Pre-Meeting Preparation
 
-    this.recognition.onresult = (event) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            transcript += event.results[i][0].transcript;
-        }
-        this.transcriptText += transcript;
-    };
-}
+- 미팅 전에 필요한 준비 정보 제공:
+  - 이전 미팅 이력 요약
+  - 미완료 task 알림
+  - 미팅 대화 주제/질문 리스트 추천
 
-startRecording() {
-    this.isRecording = true;
-    this.recognition.start();
-}
+### 탭3. Post-Meeting Analysis
 
-stopRecording() {
-    this.isRecording = false;
-    this.recognition.stop();
-    this.analyzeTranscript(); // AI 분석 자동 시작
-}
-```
+- 마이크 아이콘 클릭 시 녹음 시작/중지
+- STT 품질 개선 요구 반영:
+  - final result만 누적하여 중복 텍스트 감소
+  - overlap merge로 반복 단어 제거
+  - 인식 중단 시 자동 재시작(onend)
+  - interim 텍스트는 별도 표시
+- "분석 시작" 클릭 시 AI 분석 결과 탭으로 자동 이동
+- "취소" 클릭 시 분석 취소 처리 및 Post-Meeting 탭 유지
 
-### 탭2. AI 분석 결과
+### 탭4. AI 분석 결과
 
-- 녹음 완료 후 자동 실행 또는 텍스트 직접 입력 후 "분석 시작" 버튼으로 실행
+- 분석 시작 후 자동 진입
 - 분석 결과 표시:
-  - **영업활동 내용**: 수정 가능한 textarea로 표시 (AI가 틀릴 수 있으므로 검토 후 저장)
+  - **영업활동 내용**: 상급자 보고 가능한 상세 요약
+  - **Next Best Action**: 단일 최우선 실행안
   - **Next Action 후보**: 체크박스 목록으로 표시 (Subject / Priority / DueDate)
+  - **Next Action 추가** 버튼으로 사용자가 직접 항목 입력 가능
 - "SF 저장" 버튼:
   - 영업활동 내용 → SalesActivity__c 의 `ActivityContent__c` 필드 업데이트
   - 체크된 Next Action → `SalesActionItem__c` 일괄 생성 (`SalesActivity__c` Lookup 포함)

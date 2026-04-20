@@ -21,44 +21,127 @@
             </template>
 
             <lightning-tabset active-tab-value={activeTabValue}>
-                <lightning-tab label="음성 녹음" value="recordTab">
+                <lightning-tab label="Activity Information" value="activityTab">
                     <div class="tab-section">
-                        <div class="record-actions">
-                                <lightning-button
-                                    label="녹음 시작"
-                                    variant="brand"
-                                    onclick={startRecording}
-                                    disabled={isRecording}
-                                ></lightning-button>
-                                <lightning-button
-                                    label="녹음 완료"
-                                    variant="neutral"
-                                    onclick={stopRecording}
-                                    disabled={isStopDisabled}
-                                ></lightning-button>
-                        </div>
-                        <p class="slds-m-top_small slds-text-body_small">경과 시간: {elapsedDisplay}</p>
+                        <lightning-textarea
+                            label="영업활동 상세 내용"
+                            value={activityInformation}
+                            onchange={handleActivityInformationChange}
+                            placeholder="미팅 목적, 참석자, 고객 니즈, 주요 논의사항 등 상세 내용을 입력하세요."
+                        ></lightning-textarea>
                         <lightning-textarea
                             class="slds-m-top_small"
-                            label="녹음 텍스트"
+                            label="참고 메모"
+                            value={activityMemo}
+                            onchange={handleActivityMemoChange}
+                            placeholder="상급자 보고에 필요한 정성 정보(고객 분위기, 경쟁사 언급, 리스크 등)를 추가하세요."
+                        ></lightning-textarea>
+                    </div>
+                </lightning-tab>
+
+                <lightning-tab label="Pre-Meeting Preparation" value="preMeetingTab">
+                    <div class="tab-section">
+                        <div class="slds-grid slds-wrap slds-gutters_small">
+                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+                                <lightning-button
+                                    label="준비 정보 새로고침"
+                                    variant="brand-outline"
+                                    onclick={loadPreMeetingPreparation}
+                                    disabled={isPreparing}
+                                ></lightning-button>
+                            </div>
+                        </div>
+
+                        <template if:true={isPreparing}>
+                            <lightning-spinner alternative-text="준비 정보 생성 중..." size="medium"></lightning-spinner>
+                        </template>
+
+                        <template if:true={hasPreMeetingData}>
+                            <div class="section-box slds-m-top_medium">
+                                <p class="section-title">이전 미팅 이력 요약</p>
+                                <p class="slds-text-body_regular pre-wrap">{previousMeetingSummary}</p>
+                            </div>
+
+                            <div class="section-box slds-m-top_small">
+                                <p class="section-title">미완료 Task 알림</p>
+                                <template if:true={incompleteTasks.length}>
+                                    <template for:each={incompleteTasks} for:item="task">
+                                        <div key={task.index} class="task-row">
+                                            <p class="slds-text-body_regular">{task.subject}</p>
+                                            <p class="slds-text-body_small slds-text-color_weak">
+                                                우선순위: {task.priority} / 완료예정일: {task.dueDate}
+                                            </p>
+                                        </div>
+                                    </template>
+                                </template>
+                                <template if:false={incompleteTasks.length}>
+                                    <p class="slds-text-body_small slds-text-color_weak">미완료 Task가 없습니다.</p>
+                                </template>
+                            </div>
+
+                            <div class="section-box slds-m-top_small">
+                                <p class="section-title">추천 대화 주제 및 질문 리스트</p>
+                                <template if:true={recommendedTopics.length}>
+                                    <ul class="bullet-list">
+                                        <template for:each={recommendedTopics} for:item="topic">
+                                            <li key={topic.index}>{topic.text}</li>
+                                        </template>
+                                    </ul>
+                                </template>
+                                <template if:false={recommendedTopics.length}>
+                                    <p class="slds-text-body_small slds-text-color_weak">추천 항목이 없습니다.</p>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </lightning-tab>
+
+                <lightning-tab label="Post-Meeting Analysis" value="postMeetingTab">
+                    <div class="tab-section">
+                        <div class="record-actions">
+                            <lightning-button-icon
+                                icon-name={recordIconName}
+                                alternative-text="녹음"
+                                title="녹음"
+                                variant={recordIconVariant}
+                                onclick={handleMicClick}
+                                class="mic-button"
+                            ></lightning-button-icon>
+                            <lightning-button
+                                label="분석 시작"
+                                variant="brand"
+                                onclick={handleAnalyze}
+                                disabled={isAnalyzeDisabled}
+                            ></lightning-button>
+                            <lightning-button
+                                label="취소"
+                                variant="destructive-text"
+                                onclick={handleCancelAnalysis}
+                                disabled={isCancelDisabled}
+                            ></lightning-button>
+                        </div>
+                        <p class="slds-m-top_small slds-text-body_small">
+                            {isRecording ? '녹음 중입니다.' : '마이크 아이콘을 눌러 녹음을 시작하세요.'} 경과 시간: {elapsedDisplay}
+                        </p>
+                        <lightning-textarea
+                            class="slds-m-top_small"
+                            label="회의 녹취 텍스트"
                             value={transcriptText}
                             onchange={handleTranscriptChange}
                             placeholder="미팅 또는 통화 내용을 입력하거나 녹음을 시작하세요."
                         ></lightning-textarea>
+
+                        <template if:true={interimTranscript}>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                실시간 인식: {interimTranscript}
+                            </p>
+                        </template>
                     </div>
                 </lightning-tab>
 
                 <lightning-tab label="AI 분석 결과" value="analysisTab">
                     <div class="tab-section">
                         <div class="slds-grid slds-wrap slds-gutters_small">
-                            <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
-                                <lightning-button
-                                    label="분석 시작"
-                                    variant="brand-outline"
-                                    onclick={handleAnalyze}
-                                    disabled={isAnalyzeDisabled}
-                                ></lightning-button>
-                            </div>
                             <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
                                 <lightning-button
                                     label="SF 저장"
@@ -81,6 +164,20 @@
                                 onchange={handleActivityContentChange}
                             ></lightning-textarea>
 
+                            <div class="section-box slds-m-top_small">
+                                <p class="section-title">Next Best Action 후보</p>
+                                <template if:true={nextBestActions.length}>
+                                    <ul class="bullet-list">
+                                        <template for:each={nextBestActionRows} for:item="nba">
+                                            <li key={nba.index}>{nba.text}</li>
+                                        </template>
+                                    </ul>
+                                </template>
+                                <template if:false={nextBestActions.length}>
+                                    <p class="slds-text-body_small slds-text-color_weak">추출된 Next Best Action 후보가 없습니다.</p>
+                                </template>
+                            </div>
+
                             <div class="slds-m-top_medium">
                                 <p class="slds-text-title_bold slds-m-bottom_x-small">Next Action 후보</p>
                                 <template if:true={actionItems.length}>
@@ -97,9 +194,38 @@
                                                 ></lightning-input>
                                             </div>
                                             <div class="slds-col slds-size_1-of-1 slds-medium-size_11-of-12">
-                                                <div class="slds-text-body_regular">{item.subject}</div>
-                                                <div class="slds-text-body_small slds-text-color_weak">
-                                                    우선순위: {item.priority} / 완료 예정일: {item.dueDate}
+                                                <lightning-input
+                                                    type="text"
+                                                    label="제목"
+                                                    value={item.subject}
+                                                    data-index={item.index}
+                                                    data-field="subject"
+                                                    onchange={handleActionFieldChange}
+                                                ></lightning-input>
+                                                <div class="slds-grid slds-wrap slds-gutters_small">
+                                                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+                                                        <lightning-combobox
+                                                            label="우선순위"
+                                                            value={item.priority}
+                                                            options={priorityOptions}
+                                                            data-index={item.index}
+                                                            data-field="priority"
+                                                            onchange={handleActionFieldChange}
+                                                        ></lightning-combobox>
+                                                    </div>
+                                                    <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-3">
+                                                        <lightning-input
+                                                            type="date"
+                                                            label="완료 예정일"
+                                                            value={item.dueDate}
+                                                            data-index={item.index}
+                                                            data-field="dueDate"
+                                                            onchange={handleActionFieldChange}
+                                                        ></lightning-input>
+                                                    </div>
+                                                </div>
+                                                <div class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                                    근거: {item.reason}
                                                 </div>
                                             </div>
                                         </div>
@@ -108,6 +234,14 @@
                                 <template if:false={actionItems.length}>
                                     <p class="slds-text-body_small slds-text-color_weak">추출된 액션 아이템이 없습니다.</p>
                                 </template>
+
+                                <div class="slds-m-top_small">
+                                    <lightning-button
+                                        label="Next Action 추가"
+                                        onclick={handleAddActionItem}
+                                        variant="neutral"
+                                    ></lightning-button>
+                                </div>
                             </div>
                         </template>
                     </div>
